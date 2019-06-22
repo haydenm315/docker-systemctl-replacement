@@ -1496,13 +1496,6 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
             ExecStart=/usr/bin/sleep 4
             [Install]
             WantedBy=multi-user.target""")
-        text_file(os_path(root, "/var/run/systemd/system/zzz@.service"),"""
-            [Unit]
-            Description=Testing Z-%i
-            [Service]
-            ExecStart=/usr/bin/sleep 11%i
-            [Install]
-            WantedBy=multi-user.target""")
         cmd = "{systemctl} --type=service list-unit-files"
         out, end = output2(cmd.format(**locals()))
         logg.info(" %s =>%s\n%s", cmd, end, out)
@@ -1511,9 +1504,8 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.assertTrue(greps(out, r"zzb.service\s+disabled"))
         self.assertTrue(greps(out, r"zzc.service\s+disabled"))
         self.assertTrue(greps(out, r"zzd.service\s+disabled"))
-        self.assertTrue(greps(out, r"zzz@.service\s+disabled"))
-        if not real: self.assertIn("5 unit files listed.", out)
-        if not real: self.assertEqual(len(lines(out)), 8)
+        if not real: self.assertIn("4 unit files listed.", out)
+        if not real: self.assertEqual(len(lines(out)), 7)
         #
         cmd = "{systemctl} enable zza.service"
         out, end = output2(cmd.format(**locals()))
@@ -1531,13 +1523,8 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         out, end = output2(cmd.format(**locals()))
         logg.info(" %s =>%s\n%s", cmd, end, out)
         self.assertEqual(end, 0)
-        cmd = "{systemctl} enable zzz@9.service"
-        out, end = output2(cmd.format(**locals()))
-        logg.info(" %s =>%s\n%s", cmd, end, out)
-        self.assertEqual(end, 0)
         #
         self.assertTrue(os.path.exists(os_path(root, "/etc/systemd/system/multi-user.target.wants/zza.service")))
-        self.assertTrue(os.path.exists(os_path(root, "/etc/systemd/system/multi-user.target.wants/zzz@9.service")))
         #
         cmd = "{systemctl} --type=service list-unit-files"
         out, end = output2(cmd.format(**locals()))
@@ -1547,9 +1534,8 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.assertTrue(greps(out, r"zzb.service\s+enabled"))
         self.assertTrue(greps(out, r"zzc.service\s+enabled"))
         self.assertTrue(greps(out, r"zzd.service\s+enabled"))
-        self.assertTrue(greps(out, r"zzz@.service\s+indirect"))
-        if not real: self.assertIn("5 unit files listed.", out)
-        if not real: self.assertEqual(len(lines(out)), 8)
+        if not real: self.assertIn("4 unit files listed.", out)
+        if not real: self.assertEqual(len(lines(out)), 7)
         #
         self.rm_testdir()
         self.rm_zzfiles(root)
@@ -3399,6 +3385,148 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.assertTrue(greps(out, r"^static"))
         self.assertTrue(greps(out, r"^disabled"))
         self.assertEqual(len(lines(out)), 2)
+        #
+        self.rm_testdir()
+        self.rm_zzfiles(root)
+        self.coverage()
+        self.end()
+    def real_3007_list_unit_files_when_enabled_template(self):
+        self.test_3007_list_unit_files_when_enabled_template(True)
+    def test_3007_list_unit_files_when_enabled_template(self, real = False):
+        """ check that more unit files can be found for 'list-unit-files'
+            with an enabled status on a template service"""
+        self.begin()
+        testname = self.testname()
+        testdir = self.testdir()
+        root = self.root(testdir, real)
+        systemctl = cover() + _systemctl_py + " --root=" + root
+        if real: vv, systemctl = "", "/usr/bin/systemctl"
+        self.rm_zzfiles(root)
+        #
+        text_file(os_path(root, "/etc/systemd/system/zza.service"),"""
+            [Unit]
+            Description=Testing A""")
+        text_file(os_path(root, "/etc/systemd/system/zzb.service"),"""
+            [Unit]
+            Description=Testing B
+            [Service]
+            ExecStart=/bin/sleep 2
+            [Install]
+            WantedBy=multi-user.target""")
+        text_file(os_path(root, "/etc/systemd/system/zzz@.service"),"""
+            [Unit]
+            Description=Testing Z%i
+            [Service]
+            ExecStart=/bin/sleep 3%i
+            [Install]
+            WantedBy=multi-user.target""")
+        cmd = "{systemctl} daemon-reload"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        cmd = "{systemctl} --no-legend --type=service list-unit-files"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        self.assertTrue(greps(out, r"zza.service\s+static"))
+        self.assertTrue(greps(out, r"zzb.service\s+disabled"))
+        self.assertTrue(greps(out, r"zzz@.service\s+disabled"))
+        self.assertEqual(len(greps(out, "^zz")), 3)
+        #
+        cmd = "{systemctl} --no-legend enable zzb.service"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, "/etc/systemd/system/multi-user.target.wants/zzb.service")
+        self.assertTrue(os.path.islink(enabled_file))
+        #
+        cmd = "{systemctl} --no-legend --type=service list-unit-files"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        self.assertTrue(greps(out, r"zza.service\s+static"))
+        self.assertTrue(greps(out, r"zzb.service\s+enabled"))
+        self.assertTrue(greps(out, r"zzz@.service\s+disabled"))
+        self.assertEqual(len(greps(out, "^zz")), 3)
+        #
+        cmd = "{systemctl} --no-legend disable zzb.service"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, "/etc/systemd/system/multi-user.target.wants/zzb.service")
+        self.assertFalse(os.path.exists(enabled_file))
+        #
+        cmd = "{systemctl} --no-legend --type=service list-unit-files"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        self.assertTrue(greps(out, r"zza.service\s+static"))
+        self.assertTrue(greps(out, r"zzb.service\s+disabled"))
+        self.assertTrue(greps(out, r"zzz@.service\s+disabled"))
+        self.assertEqual(len(greps(out, "^zz")), 3)
+        #
+        cmd = "{systemctl} --no-legend enable zzz@9.service"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, "/etc/systemd/system/multi-user.target.wants/zzz@9.service")
+        self.assertTrue(os.path.islink(enabled_file))
+        #
+        cmd = "{systemctl} --no-legend --type=service list-unit-files"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        self.assertTrue(greps(out, r"zza.service\s+static"))
+        self.assertTrue(greps(out, r"zzb.service\s+disabled"))
+        self.assertTrue(greps(out, r"zzz@.service\s+indirect"))
+        self.assertEqual(len(greps(out, "^zz")), 3)
+        #
+        cmd = "{systemctl} --no-legend enable zzz@8.service"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, "/etc/systemd/system/multi-user.target.wants/zzz@8.service")
+        self.assertTrue(os.path.islink(enabled_file))
+        #
+        cmd = "{systemctl} --no-legend --type=service list-unit-files"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        self.assertTrue(greps(out, r"zza.service\s+static"))
+        self.assertTrue(greps(out, r"zzb.service\s+disabled"))
+        self.assertTrue(greps(out, r"zzz@.service\s+indirect"))
+        self.assertEqual(len(greps(out, "^zz")), 3)
+        #
+        cmd = "{systemctl} --no-legend disable zzz@9.service"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, "/etc/systemd/system/multi-user.target.wants/zzz@9.service")
+        self.assertFalse(os.path.exists(enabled_file))
+        #
+        cmd = "{systemctl} --no-legend --type=service list-unit-files"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        self.assertTrue(greps(out, r"zza.service\s+static"))
+        self.assertTrue(greps(out, r"zzb.service\s+disabled"))
+        self.assertTrue(greps(out, r"zzz@.service\s+indirect"))
+        self.assertEqual(len(greps(out, "^zz")), 3)
+        #
+        cmd = "{systemctl} --no-legend disable zzz@8.service"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, "/etc/systemd/system/multi-user.target.wants/zzz@8.service")
+        self.assertFalse(os.path.exists(enabled_file))
+        #
+        cmd = "{systemctl} --no-legend --type=service list-unit-files"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        self.assertTrue(greps(out, r"zza.service\s+static"))
+        self.assertTrue(greps(out, r"zzb.service\s+disabled"))
+        self.assertTrue(greps(out, r"zzz@.service\s+disabled"))
+        self.assertEqual(len(greps(out, "^zz")), 3)
         #
         self.rm_testdir()
         self.rm_zzfiles(root)
