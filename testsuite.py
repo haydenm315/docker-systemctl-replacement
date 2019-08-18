@@ -21125,7 +21125,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.assertGreater(stopping, 1)
         self.assertGreater(degraded, 0)
         self.assertEqual(other, 0)
-        self.assertEqual(others, 0)
+        self.assertLower(others, 1)
     def test_5810_systemctl_py_is_system_wait_running(self):
         """ check that the startup and shutdown sequence with the sysvinit.status target
             where 'is-system-running --wait' will wait till all services have started."""
