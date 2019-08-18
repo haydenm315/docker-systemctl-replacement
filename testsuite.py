@@ -362,6 +362,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
             os.makedirs(path)
     def real_folders(self):
         yield "/etc/systemd/system"
+        yield "/etc/systemd/user"
         yield "/var/run/systemd/system"
         yield "/usr/lib/systemd/system"
         yield "/lib/systemd/system"
@@ -370,6 +371,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         yield "/var/run"
         yield "/etc/sysconfig"
         yield "/etc/systemd/system/multi-user.target.wants"
+        yield "/etc/systemd/user/multi-user.target.wants"
         yield "/usr/bin"
     def rm_zzfiles(self, root):
         for folder in self.real_folders():
@@ -3053,9 +3055,9 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.rm_testdir()
         self.rm_zzfiles(root)
         self.coverage()
-    def real_3002_enable_service_creates_a_symlink(self):
-        self.test_3002_enable_service_creates_a_symlink(True)
-    def test_3002_enable_service_creates_a_symlink(self, real = False):
+    def real_3000_enable_service_creates_a_symlink(self):
+        self.test_3000_enable_service_creates_a_symlink(True)
+    def test_3000_enable_service_creates_a_symlink(self, real = False):
         """ check that a service can be enabled """
         self.begin()
         testname = self.testname()
@@ -3091,9 +3093,9 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.rm_zzfiles(root)
         self.coverage()
         self.end()
-    def real_3003_disable_service_removes_the_symlink(self):
+    def real_3001_disable_service_removes_the_symlink(self):
         self.test_3003_disable_service_removes_the_symlink(True)
-    def test_3003_disable_service_removes_the_symlink(self, real = False):
+    def test_3001_disable_service_removes_the_symlink(self, real = False):
         """ check that a service can be enabled and disabled """
         self.begin()
         testname = self.testname()
@@ -3155,6 +3157,151 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.assertFalse(os.path.exists(enabled_file))
         #
         cmd = "{systemctl} disable zz-other.service"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertNotEqual(end, 0)
+        #
+        self.rm_testdir()
+        self.rm_zzfiles(root)
+        self.coverage()
+        self.end()
+    def real_3002_enable_and_disable_service_for_user_global(self):
+        self.test_3002_enable_and_disable_service_for_user_global(True)
+    def test_3002_enable_and_disable_service_for_user_global(self, real = False):
+        """ check that a service can be enabled and disabled for user --global"""
+        self.begin()
+        testname = self.testname()
+        testdir = self.testdir()
+        root = self.root(testdir, real)
+        systemctl = cover() + _systemctl_py + " --root=" + root
+        if real: vv, systemctl = "", "/usr/bin/systemctl"
+        self.rm_zzfiles(root)
+        #
+        text_file(os_path(root, "/etc/systemd/user/zzab.service"),"""
+            [Unit]
+            Description=Testing AA""")
+        text_file(os_path(root, "/etc/systemd/user/zzbb.service"),"""
+            [Unit]
+            Description=Testing BB
+            [Service]
+            ExecStart=/bin/sleep 2
+            [Install]
+            WantedBy=multi-user.target""")
+        cmd = "{systemctl} daemon-reload"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        cmd = "{systemctl} enable zzbb.service --global"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, "/etc/systemd/user/multi-user.target.wants/zzbb.service")
+        self.assertTrue(os.path.islink(enabled_file))
+        textB = file(enabled_file).read()
+        self.assertTrue(greps(textB, "Testing BB"))
+        self.assertIn("\nDescription", textB)
+        #
+        cmd = "{systemctl} enable zzbb.service --global"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, "/etc/systemd/user/multi-user.target.wants/zzbb.service")
+        self.assertTrue(os.path.islink(enabled_file))
+        #
+        cmd = "{systemctl} enable zz-other.service --global"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertNotEqual(end, 0)
+        enabled_file = os_path(root, "/etc/systemd/user/multi-user.target.wants/zz-other.service")
+        self.assertFalse(os.path.islink(enabled_file))
+        #
+        cmd = "{systemctl} disable zzbb.service --global"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, "/etc/systemd/user/multi-user.target.wants/zzbb.service")
+        self.assertFalse(os.path.exists(enabled_file))
+        #
+        cmd = "{systemctl} disable zzbb.service --global"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, "/etc/systemd/user/multi-user.target.wants/zzbb.service")
+        self.assertFalse(os.path.exists(enabled_file))
+        #
+        cmd = "{systemctl} disable zz-other.service --global"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertNotEqual(end, 0)
+        #
+        self.rm_testdir()
+        self.rm_zzfiles(root)
+        self.coverage()
+        self.end()
+    def real_3003_enable_and_disable_service_for_user_local(self):
+        self.test_3003_enable_and_disable_service_for_user_local(True)
+    def test_3003_enable_and_disable_service_for_user_local(self, real = False):
+        """ check that a service can be enabled and disabled for --user local"""
+        self.begin()
+        testname = self.testname()
+        testdir = self.testdir()
+        root = self.root(testdir, real)
+        systemctl = cover() + _systemctl_py + " --root=" + root
+        if real: vv, systemctl = "", "/usr/bin/systemctl"
+        self.rm_zzfiles(root)
+        CONFIG_HOME=os.path.expanduser("~/.config")
+        #
+        text_file(os_path(root, "/etc/systemd/user/zzab.service"),"""
+            [Unit]
+            Description=Testing AA""")
+        text_file(os_path(root, "/etc/systemd/user/zzbb.service"),"""
+            [Unit]
+            Description=Testing BB
+            [Service]
+            ExecStart=/bin/sleep 2
+            [Install]
+            WantedBy=multi-user.target""")
+        cmd = "{systemctl} daemon-reload"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        cmd = "{systemctl} enable zzbb.service --user"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, CONFIG_HOME+"/systemd/user/multi-user.target.wants/zzbb.service")
+        self.assertTrue(os.path.islink(enabled_file))
+        textB = file(enabled_file).read()
+        self.assertTrue(greps(textB, "Testing BB"))
+        self.assertIn("\nDescription", textB)
+        #
+        cmd = "{systemctl} enable zzbb.service --user"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, CONFIG_HOME+"/systemd/user/multi-user.target.wants/zzbb.service")
+        self.assertTrue(os.path.islink(enabled_file))
+        #
+        cmd = "{systemctl} enable zz-other.service --user"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertNotEqual(end, 0)
+        enabled_file = os_path(root, CONFIG_HOME+"/systemd/user/multi-user.target.wants/zz-other.service")
+        self.assertFalse(os.path.islink(enabled_file))
+        #
+        cmd = "{systemctl} disable zzbb.service --user"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, CONFIG_HOME+"/systemd/user/multi-user.target.wants/zzbb.service")
+        self.assertFalse(os.path.exists(enabled_file))
+        #
+        cmd = "{systemctl} disable zzbb.service --user"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        enabled_file = os_path(root, CONFIG_HOME+"/systemd/user/multi-user.target.wants/zzbb.service")
+        self.assertFalse(os.path.exists(enabled_file))
+        #
+        cmd = "{systemctl} disable zz-other.service --user"
         out, end = output2(cmd.format(**locals()))
         logg.info(" %s =>%s\n%s", cmd, end, out)
         self.assertNotEqual(end, 0)
