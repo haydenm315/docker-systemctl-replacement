@@ -16496,7 +16496,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         testdir = self.testdir()
         self.usermode_simple_service_functions("system", testname, testdir)
         self.rm_testdir()
-        self.end()
+        self.end(99)
     def test_5131_simple_service_functions_user(self):
         """ check that we manage simple services in a root env
             with commands like start, restart, stop, etc"""
@@ -16505,7 +16505,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         testdir = self.testdir()
         self.usermode_simple_service_functions("user", testname, testdir)
         self.rm_testdir()
-        self.end()
+        self.end(99)
     def usermode_simple_service_functions(self, system, testname, testdir):
         """ check that we manage simple services in a root env
             with commands like start, restart, stop, etc"""
@@ -16927,7 +16927,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         testdir = self.testdir()
         self.usermode_forking_service_functions("system", testname, testdir)
         self.rm_testdir()
-        self.end()
+        self.end(99)
     def test_5133_usermode_forking_service_functions_user(self):
         """ check that we manage forking services in a root env
             with basic run-service commands: start, stop, restart,
@@ -16938,7 +16938,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         testdir = self.testdir()
         self.forking_service_functions("user", testname, testdir)
         self.rm_testdir()
-        self.end()
+        self.end(99)
     def usermode_forking_service_functions(self, system, testname, testdir):
         if not os.path.exists(DOCKER_SOCKET): self.skipTest("docker-based test")
         images = IMAGES
@@ -17313,7 +17313,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.usermode_notify_service_functions("system", testname, testdir)
         self.rm_testdir()
         self.coverage()
-        self.end()
+        self.end(99)
     def test_5135_usermode_notify_service_functions_user(self):
         """ check that we manage notify services in a root env
             with basic run-service commands: start, stop, restart,
@@ -17324,7 +17324,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         testdir = self.testdir()
         self.usermode_notify_service_functions("user", testname, testdir)
         self.rm_testdir()
-        self.end()
+        self.end(99)
     def usermode_notify_service_functions(self, system, testname, testdir):
         if not os.path.exists(DOCKER_SOCKET): self.skipTest("docker-based test")
         images = IMAGES
