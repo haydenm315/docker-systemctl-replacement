@@ -54,9 +54,11 @@ _unit_state = None
 _unit_property = None
 _show_all = False
 _user_mode = False
+_user_global = False
 
 # common default paths
 _default_target = "multi-user.target"
+_system_global = "/etc/systemd"
 _system_folder1 = "/etc/systemd/system"
 _system_folder2 = "/var/run/systemd/system"
 _system_folder3 = "/usr/lib/systemd/system"
@@ -482,10 +484,11 @@ class SystemctlConf:
         self.drop_in_files = {}
         self._root = _root
         self._user_mode = _user_mode
+        self._user_global = _user_global
     def os_path(self, path):
         return os_path(self._root, path)
     def os_path_var(self, path):
-        if self._user_mode:
+        if self._user_mode: # not _user_global
             return os_path(self._root, _var_path(path))
         return os_path(self._root, path)
     def loaded(self):
@@ -837,21 +840,16 @@ class Systemctl:
         self.exit_when_no_more_procs = EXIT_WHEN_NO_MORE_PROCS or False
         self.exit_when_no_more_services = EXIT_WHEN_NO_MORE_SERVICES or False
         self._user_mode = _user_mode
+        self._user_global = _user_global
         self._user_getlogin = os_getlogin()
         self._log_file = {} # init-loop
         self._log_hold = {} # init-loop
     def user(self):
         return self._user_getlogin
     def user_mode(self):
-        return self._user_mode
-    def user_folder(self):
-        for folder in self.user_folders():
-            if folder: return folder
-        raise Exception("did not find any systemd/user folder")
-    def system_folder(self):
-        for folder in self.system_folders():
-            if folder: return folder
-        raise Exception("did not find any systemd/system folder")
+        return self._user_mode or self._user_global
+    def user_global(self):
+        return self._user_global
     def init_folders(self):
         if _init_folder1: yield _init_folder1
         if _init_folder2: yield _init_folder2
@@ -1973,7 +1971,7 @@ class Systemctl:
                     service_result = "failed"
                     break
             if service_result in [ "success" ] and mainpid:
-                logg.debug("okay, wating on socket for %ss", timeout)
+                logg.debug("okay, waiting on socket for %ss", timeout)
                 results = self.wait_notify_socket(notify, timeout, mainpid)
                 if "MAINPID" in results:
                     new_pid = results["MAINPID"]
@@ -2003,7 +2001,7 @@ class Systemctl:
                 if run.returncode and check:
                     returncode = run.returncode
                     service_result = "failed"
-                logg.info("%s stopped PID %s (%s) <-%s>", runs, run.pid, 
+                logg.info("%s forking PID %s (%s) <-%s>", runs, run.pid, 
                     run.returncode or "OK", run.signal or "")
             if pid_file and service_result in [ "success" ]:
                 pid = self.wait_pid_file(pid_file) # application PIDFile
@@ -2013,7 +2011,6 @@ class Systemctl:
             if not pid_file:
                 time.sleep(MinimumTimeoutStartSec)
                 logg.warning("No PIDFile for forking %s", conf.filename())
-                status_file = self.status_file_from(conf)
                 self.set_status_from(conf, "ExecMainCode", returncode)
                 active = returncode and "failed" or "active"
                 self.write_status_from(conf, AS=active)
@@ -2035,7 +2032,7 @@ class Systemctl:
                 if not forkpid:
                     self.execve_from(conf, newcmd, env) # pragma: nocover
                 run = subprocess_waitpid(forkpid)
-                logg.debug("post-fail done (%s) <-%s>", 
+                logg.debug("%s post-fail done (%s) <-%s>", runs,
                     run.returncode or "OK", run.signal or "")
             return False
         else:
@@ -3030,18 +3027,28 @@ class Systemctl:
     def enablefolders(self, wanted):
         if self.user_mode():
             for folder in self.user_folders():
-                 yield self.default_enablefolder(wanted, folder)
+                yield self.default_enablefolder(wanted, folder)
         if True:
             for folder in self.system_folders():
-                 yield self.default_enablefolder(wanted, folder)
+                yield self.default_enablefolder(wanted, folder)
     def enablefolder(self, wanted = None):
         if self.user_mode():
-            user_folder = self.user_folder()
-            return self.default_enablefolder(wanted, user_folder)
+            for folder in self.user_folders():
+                if not folder:
+                    continue
+                if self.user_global() and not folder.startswith(_system_global):
+                    continue
+                return self.default_enablefolder(wanted, folder)
+            raise Exception("did not find any systemd/user folder")
         else:
-            return self.default_enablefolder(wanted)
-    def default_enablefolder(self, wanted = None, basefolder = None):
-        basefolder = basefolder or self.system_folder()
+            for folder in self.system_folders():
+                if not folder:
+                    continue
+                return self.default_enablefolder(wanted, folder)
+            raise Exception("did not find any systemd/system folder")
+    def default_enablefolder(self, wanted, basefolder):
+        if not basefolder:
+            return basefolder
         if not wanted: 
             return wanted
         if not wanted.endswith(".wants"):
@@ -4424,7 +4431,7 @@ if __name__ == "__main__":
         help="Show package version")
     _o.add_option("--system", action="store_true", default=False,
         help="Connect to system manager (default)") # overrides --user
-    _o.add_option("--user", action="store_true", default=_user_mode,
+    _o.add_option("--user", action="store_true", dest="user_mode", default=_user_mode,
         help="Connect to user service manager")
     # _o.add_option("-H", "--host", metavar="[USER@]HOST",
     #     help="Operate on remote host*")
@@ -4468,8 +4475,8 @@ if __name__ == "__main__":
         help="Don't reload daemon after en-/dis-abling unit files (ignored)")
     _o.add_option("--no-ask-password", action="store_true", default=_no_ask_password,
         help="Do not ask for system passwords")
-    # _o.add_option("--global", action="store_true", dest="globally", default=_globally,
-    #    help="Enable/disable unit files globally") # for all user logins
+    _o.add_option("--global", action="store_true", dest="user_global", default=_user_global,
+        help="Enable/disable unit files globally") # implies --user but only enable/disable know it
     # _o.add_option("--runtime", action="store_true",
     #     help="Enable unit files only temporarily until next reboot")
     _o.add_option("--force", action="store_true", default=_force,
@@ -4529,7 +4536,8 @@ if __name__ == "__main__":
     # being PID 1 (or 0) in a container will imply --init
     _pid = os.getpid()
     _init = opt.init or _pid in [ 1, 0 ]
-    _user_mode = opt.user
+    _user_mode = opt.user_mode
+    _user_global = opt.user_global
     if os.geteuid() and _pid in [ 1, 0 ]:
         _user_mode = True
     if opt.system:
