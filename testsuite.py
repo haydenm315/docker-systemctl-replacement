@@ -21101,6 +21101,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
             chk = output(cmd.format(**locals()))
             logg.info("\n>>>\n%s", chk)
             if not chk.strip(): break
+            if "cannot exec a container that has stopped" in chk: continue
             if chk.strip() in ["stopping"]: stopping += 1
             elif chk.strip() in ["degraded"]: degraded += 1
             else: others += 1
