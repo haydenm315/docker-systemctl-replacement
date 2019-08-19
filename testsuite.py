@@ -14686,7 +14686,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         testdir = self.testdir()
         self.runuser_notify_service_functions("system", testname, testdir)
         self.rm_testdir()
-        self.end()
+        self.end(199) #TODO# too long?
     def test_5035_runuser_notify_service_functions_user(self):
         """ check that we manage notify services in a root env
             with basic run-service commands: start, stop, restart,
@@ -21125,7 +21125,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.assertGreater(stopping, 1)
         self.assertGreater(degraded, 0)
         self.assertEqual(other, 0)
-        self.assertLower(others, 1)
+        self.assertLess(others, 1)
     def test_5810_systemctl_py_is_system_wait_running(self):
         """ check that the startup and shutdown sequence with the sysvinit.status target
             where 'is-system-running --wait' will wait till all services have started."""
