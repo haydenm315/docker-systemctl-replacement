@@ -4996,6 +4996,208 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.rm_zzfiles(root)
         self.coverage()
         self.end()
+    def test_3036_systemctl_py_start_setuid(self, real = False):
+        """ check that we can start extra simple services with root env and User="""
+        self.begin()
+        testname = self.testname()
+        testdir = self.testdir()
+        user = self.user()
+        root = self.root(testdir, real)
+        systemctl = cover() + _systemctl_py + " --root=" + root + " --coverage=sameuser"
+        if real: vv, systemctl = "", "/usr/bin/systemctl"
+        testsleep = self.testname("sleep")
+        bindir = os_path(root, "/usr/bin")
+        text_file(os_path(testdir, "zzz.service"),"""
+            [Unit]
+            Description=Testing Z
+            [Service]
+            Type=simple
+            User=nobody
+            ExecStart={bindir}/{testsleep} 111
+            [Install]
+            WantedBy=multi-user.target
+            """.format(**locals()))
+        copy_tool(SLEEP_TOOL, os_path(bindir, testsleep))
+        copy_file(os_path(testdir, "zzz.service"), os_path(root, "/etc/systemd/system/zzz.service"))
+        #
+        cmd = "{systemctl} enable zzz.service"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        cmd = "{systemctl} --version"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        cmd = "{systemctl} default-services -vv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        self.assertTrue(greps(out, "zzz.service"))
+        self.assertEqual(len(lines(out)), 1)
+        #
+        cmd = "{systemctl} start zzz.service -vvv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        top = _recent(output(_top_list))
+        logg.info("\n>>>\n%s", top)
+        self.assertTrue(greps(top, testsleep))
+        #
+        cmd = "{systemctl} stop zzz.service -vv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        top = _recent(output(_top_list))
+        logg.info("\n>>>\n%s", top)
+        self.assertFalse(greps(top, testsleep))
+        kill_testsleep = "killall {testsleep}"
+        sx____(kill_testsleep.format(**locals()))
+        journal_log = root + "/var/log/journal/zzz.service.log"
+        journal = open(journal_log).read()
+        logg.info("zzz.service journal >>\n%s", journal)
+        self.rm_testdir()
+        self.rm_zzfiles(root)
+        #
+        self.assertFalse(greps(journal, "setgid 655.*Group="))
+        self.assertTrue(greps(journal, "setgid 655.*User="))
+        self.assertTrue(greps(journal, "setuid 655.*User="))
+        self.coverage()
+        self.end()
+    def test_3037_systemctl_py_start_setuid_and_setgid(self, real = False):
+        """ check that we can start extra simple services with root env and User="""
+        self.begin()
+        testname = self.testname()
+        testdir = self.testdir()
+        user = self.user()
+        root = self.root(testdir, real)
+        systemctl = cover() + _systemctl_py + " --root=" + root + " --coverage=sameuser"
+        if real: vv, systemctl = "", "/usr/bin/systemctl"
+        testsleep = self.testname("sleep")
+        bindir = os_path(root, "/usr/bin")
+        text_file(os_path(testdir, "zzz.service"),"""
+            [Unit]
+            Description=Testing Z
+            [Service]
+            Type=simple
+            Group=nobody
+            User=nobody
+            ExecStart={bindir}/{testsleep} 111
+            [Install]
+            WantedBy=multi-user.target
+            """.format(**locals()))
+        copy_tool(SLEEP_TOOL, os_path(bindir, testsleep))
+        copy_file(os_path(testdir, "zzz.service"), os_path(root, "/etc/systemd/system/zzz.service"))
+        #
+        cmd = "{systemctl} enable zzz.service"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        cmd = "{systemctl} --version"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        cmd = "{systemctl} default-services -vv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        self.assertTrue(greps(out, "zzz.service"))
+        self.assertEqual(len(lines(out)), 1)
+        #
+        cmd = "{systemctl} start zzz.service -vvv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        top = _recent(output(_top_list))
+        logg.info("\n>>>\n%s", top)
+        self.assertTrue(greps(top, testsleep))
+        #
+        cmd = "{systemctl} stop zzz.service -vv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        top = _recent(output(_top_list))
+        logg.info("\n>>>\n%s", top)
+        self.assertFalse(greps(top, testsleep))
+        kill_testsleep = "killall {testsleep}"
+        sx____(kill_testsleep.format(**locals()))
+        journal_log = root + "/var/log/journal/zzz.service.log"
+        journal = open(journal_log).read()
+        logg.info("zzz.service journal >>\n%s", journal)
+        self.rm_testdir()
+        self.rm_zzfiles(root)
+        #
+        self.assertTrue(greps(journal, "setgid 655.*Group="))
+        self.assertFalse(greps(journal, "setgid 655.*User="))
+        self.assertTrue(greps(journal, "setuid 655.*User="))
+        self.coverage()
+        self.end()
+    def test_3038_systemctl_py_start_only_setgid(self, real = False):
+        """ check that we can start extra simple services with root env and Group="""
+        self.begin()
+        testname = self.testname()
+        testdir = self.testdir()
+        user = self.user()
+        root = self.root(testdir, real)
+        systemctl = cover() + _systemctl_py + " --root=" + root + " --coverage=sameuser"
+        if real: vv, systemctl = "", "/usr/bin/systemctl"
+        testsleep = self.testname("sleep")
+        bindir = os_path(root, "/usr/bin")
+        text_file(os_path(testdir, "zzz.service"),"""
+            [Unit]
+            Description=Testing Z
+            [Service]
+            Type=simple
+            Group=nobody
+            ExecStart={bindir}/{testsleep} 111
+            [Install]
+            WantedBy=multi-user.target
+            """.format(**locals()))
+        copy_tool(SLEEP_TOOL, os_path(bindir, testsleep))
+        copy_file(os_path(testdir, "zzz.service"), os_path(root, "/etc/systemd/system/zzz.service"))
+        #
+        cmd = "{systemctl} enable zzz.service"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        cmd = "{systemctl} --version"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        cmd = "{systemctl} default-services -vv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        self.assertTrue(greps(out, "zzz.service"))
+        self.assertEqual(len(lines(out)), 1)
+        #
+        cmd = "{systemctl} start zzz.service -vvv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        top = _recent(output(_top_list))
+        logg.info("\n>>>\n%s", top)
+        self.assertTrue(greps(top, testsleep))
+        #
+        cmd = "{systemctl} stop zzz.service -vv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        top = _recent(output(_top_list))
+        logg.info("\n>>>\n%s", top)
+        self.assertFalse(greps(top, testsleep))
+        kill_testsleep = "killall {testsleep}"
+        sx____(kill_testsleep.format(**locals()))
+        journal_log = root + "/var/log/journal/zzz.service.log"
+        journal = open(journal_log).read()
+        logg.info("zzz.service journal >>\n%s", journal)
+        self.rm_testdir()
+        self.rm_zzfiles(root)
+        #
+        self.assertTrue(greps(journal, "setgid 655.*Group="))
+        self.assertFalse(greps(journal, "setgid 655.*User="))
+        self.assertFalse(greps(journal, "setuid 655.*User="))
+        self.coverage()
+        self.end()
     def test_3040_systemctl_py_start_simple_bad_stop(self, real = False):
         """ check that we can start simple services with root env"""
         self.begin()

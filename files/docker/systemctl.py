@@ -28,7 +28,7 @@ else:
     string_types = str
     xrange = range
 
-# --coverage=removelockfile,oldest,spawn,sleep,quick,initializing
+# --coverage=removelockfile,oldest,spawn,sleep,quick,initializing,sameuser
 COVERAGE = os.environ.get("SYSTEMCTL_COVERAGE", "")
 DEBUG_AFTER = os.environ.get("SYSTEMCTL_DEBUG_AFTER", "") or False
 EXIT_WHEN_NO_MORE_PROCS = os.environ.get("SYSTEMCTL_EXIT_WHEN_NO_MORE_PROCS", "") or False
@@ -175,6 +175,16 @@ def os_getlogin():
     import pwd
     return pwd.getpwuid(os.geteuid()).pw_name
 
+def os_setuid(uid, msg = None):
+    logg.debug("setuid %s (%s)", uid, msg or "!")
+    if "sameuser" not in COVERAGE:
+        os.setuid(uid) # pragma: nocover
+
+def os_setgid(gid, msg = None):
+    logg.debug("setgid %s (%s)", gid, msg or "!")
+    if "sameuser" not in COVERAGE:
+        os.setgid(gid) # pragma: nocover
+
 def get_runtime_dir():
     explicit = os.environ.get("XDG_RUNTIME_DIR", "")
     if explicit: return explicit
@@ -205,18 +215,15 @@ def shutil_setuid(user = None, group = None):
     if group:
         import grp
         gid = grp.getgrnam(group).gr_gid
-        os.setgid(gid)
-        logg.debug("setgid %s '%s'", gid, group)
+        os_setgid(gid, "Group=%s" % group)
     if user:
         import pwd
         pw = pwd.getpwnam(user)
         if not group:
             gid = pw.pw_gid
-            os.setgid(gid)
-            logg.debug("setgid %s", gid)
+            os_setgid(gid, "User=%s" % user)
         uid = pw.pw_uid
-        os.setuid(uid)
-        logg.debug("setuid %s '%s'", uid, user)
+        os_setuid(uid, "User=%s" % user)
         home = pw.pw_dir
         shell = pw.pw_shell
         logname = pw.pw_name
@@ -1657,6 +1664,7 @@ class Systemctl:
         log_folder = os.path.dirname(log_file)
         if not os.path.isdir(log_folder):
             os.makedirs(log_folder)
+        logg.debug("journal log >> %s", log_file)
         return open(os.path.join(log_file), "a")
     def chdir_workingdir(self, conf, check = True):
         """ if specified then change the working directory """
@@ -2060,9 +2068,10 @@ class Systemctl:
         logg.debug("%s process for %s", runs, conf.filename())
         inp = open("/dev/zero")
         out = self.open_journal_log(conf)
-        os.dup2(inp.fileno(), sys.stdin.fileno())
-        os.dup2(out.fileno(), sys.stdout.fileno())
-        os.dup2(out.fileno(), sys.stderr.fileno())
+        if "stderr" not in COVERAGE:
+            os.dup2(inp.fileno(), sys.stdin.fileno())
+            os.dup2(out.fileno(), sys.stdout.fileno())
+            os.dup2(out.fileno(), sys.stderr.fileno())
         runuser = self.expand_special(conf.get("Service", "User", ""), conf)
         rungroup = self.expand_special(conf.get("Service", "Group", ""), conf)
         envs = shutil_setuid(runuser, rungroup)
