@@ -1000,16 +1000,6 @@ class Systemctl:
                 if name not in result:
                     result[name] = path
         return result
-    def load_sysd_template_conf(self, module): # -> conf?
-        """ read the unit template with a UnitConfParser (systemd) """
-        if "@" in module:
-            unit = parse_unit(module)
-            service = "%s@.service" % unit.prefix
-            conf = self.load_sysd_unit_conf(service)
-            if conf:
-                conf.module = module
-            return conf
-        return None
     def load_sysd_unit_conf(self, module): # -> conf?
         """ read the unit file with a UnitConfParser (systemd) """
         if not module: return None
@@ -1051,9 +1041,6 @@ class Systemctl:
         """ read the unit file with a UnitConfParser (sysv or systemd) """
         try:
             conf = self.load_sysd_unit_conf(module)
-            if conf is not None:
-                return conf
-            conf = self.load_sysd_template_conf(module)
             if conf is not None:
                 return conf
             conf = self.load_sysv_unit_conf(module)
