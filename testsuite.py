@@ -5614,7 +5614,7 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         actB, exitB  = output2(is_active_B.format(**locals()))
         actC, exitC  = output2(is_active_C.format(**locals()))
         actD, exitD  = output2(is_active_D.format(**locals()))
-        self.assertEqual(actA.strip(), "unknown")
+        self.assertEqual(actA.strip(), "inactive")
         self.assertEqual(actB.strip(), "inactive")
         self.assertEqual(actC.strip(), "inactive")
         self.assertEqual(exitA, 3)
@@ -5635,10 +5635,10 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         actB, exitB  = output2(is_active_B.format(**locals()))
         actC, exitC  = output2(is_active_C.format(**locals()))
         actD, exitD  = output2(is_active_D.format(**locals()))
-        self.assertEqual(actA.strip(), "unknown")
+        self.assertEqual(actA.strip(), "inactive")
         self.assertEqual(actB.strip(), "active")
         self.assertEqual(actC.strip(), "inactive")
-        self.assertEqual(actD.strip(), "unknown")
+        self.assertEqual(actD.strip(), "inactive")
         self.assertNotEqual(exitA, 0)
         self.assertEqual(exitB, 0)
         self.assertNotEqual(exitC, 0)
@@ -5654,13 +5654,13 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         actBD, exitBD  = output2(is_active_BD.format(**locals()))
         actBCD, exitBCD  = output2(is_active_BCD.format(**locals()))
         self.assertEqual(actBC.split("\n"), ["active", "inactive", ""])
-        self.assertEqual(actCD.split("\n"), [ "inactive", "unknown",""])
-        self.assertEqual(actBD.split("\n"), [ "active", "unknown", ""])
-        self.assertEqual(actBCD.split("\n"), ["active", "inactive", "unknown", ""])
-        self.assertNotEqual(exitBC, 0)         ## this is how the original systemctl
+        self.assertEqual(actCD.split("\n"), [ "inactive", "inactive",""])
+        self.assertEqual(actBD.split("\n"), [ "active", "inactive", ""])
+        self.assertEqual(actBCD.split("\n"), ["active", "inactive", "inactive", ""])
+        self.assertEqual(exitBC, 0)         ## this is how the original systemctl
         self.assertNotEqual(exitCD, 0)         ## works. The documentation however
-        self.assertNotEqual(exitBD, 0)         ## says to return 0 if any service
-        self.assertNotEqual(exitBCD, 0)        ## is found to be 'active'
+        self.assertEqual(exitBD, 0)         ## says to return 0 if any service
+        self.assertEqual(exitBCD, 0)        ## is found to be 'active'
         top = _recent(output(_top_list))
         logg.info("\n>>>\n%s", top)
         self.assertTrue(greps(top, testsleep+" 99"))
@@ -7698,7 +7698,47 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.rm_zzfiles(root)
         self.coverage()
         self.end()
-    def test_3532_systemctl_py_with_bad_workingdirectory(self, real = False):
+    def test_3532_systemctl_py_simple_in_workingdirectory_COVERAGE(self, real = False):
+        """ check that we can start simple services with a WorkingDirectory"""
+        self.begin()
+        testname = self.testname()
+        testdir = self.testdir()
+        user = self.user()
+        root = self.root(testdir, real)
+        logfile = os_path(root, "/var/log/test.log")
+        systemctl = cover() + _systemctl_py + " --root=" + root + " --coverage=spawn"
+        if real: vv, systemctl = "", "/usr/bin/systemctl"
+        testsleep = self.testname("sleep")
+        bindir = os_path(root, "/usr/bin")
+        workingdir = "/var/testsleep"
+        text_file(os_path(testdir, "zzz.service"),"""
+            [Unit]
+            Description=Testing Z
+            [Service]
+            Type=simple
+            WorkingDirectory={workingdir}
+            ExecStart={bindir}/{testsleep} 2
+            ExecStop=/usr/bin/killall {testsleep}
+            [Install]
+            WantedBy=multi-user.target
+            """.format(**locals()))
+        copy_tool(SLEEP_TOOL, os_path(bindir, testsleep))
+        copy_file(os_path(testdir, "zzz.service"), os_path(root, "/etc/systemd/system/zzz.service"))
+        os.makedirs(os_path(root, workingdir))
+        #
+        cmd = "{systemctl} start zzz.service -vv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        top = _recent(output(_top_list))
+        logg.info("\n>>>\n%s", top)
+        self.assertTrue(greps(top, testsleep))
+        #
+        self.rm_testdir()
+        self.rm_zzfiles(root)
+        self.coverage()
+        self.end()
+    def test_3533_systemctl_py_with_bad_workingdirectory(self, real = False):
         """ check that we can start simple services with a bad WorkingDirectory"""
         self.begin()
         testname = self.testname()
@@ -7756,11 +7796,55 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.assertFalse(greps(top, testsleep))
         kill_testsleep = "killall {testsleep}"
         sx____(kill_testsleep.format(**locals()))
+        journal_log = root + "/var/log/journal/zzz.service.log"
+        journal = open(journal_log).read()
+        logg.info("zzz.service journal >>\n%s", journal)
+        self.rm_testdir()
+        self.rm_zzfiles(root)
+        self.assertTrue(greps(journal, "chdir workingdir.*No such"))
+        self.coverage()
+        self.end()
+    def test_3534_systemctl_py_with_bad_workingdirectory_COVERAGE(self, real = False):
+        """ check that we can start simple services with a WorkingDirectory"""
+        self.begin()
+        testname = self.testname()
+        testdir = self.testdir()
+        user = self.user()
+        root = self.root(testdir, real)
+        logfile = os_path(root, "/var/log/test.log")
+        systemctl = cover() + _systemctl_py + " --root=" + root + " --coverage=spawn"
+        if real: vv, systemctl = "", "/usr/bin/systemctl"
+        testsleep = self.testname("sleep")
+        bindir = os_path(root, "/usr/bin")
+        workingdir = "/var/testsleep"
+        text_file(os_path(testdir, "zzz.service"),"""
+            [Unit]
+            Description=Testing Z
+            [Service]
+            Type=simple
+            WorkingDirectory={workingdir}
+            ExecStart={bindir}/{testsleep} 2
+            ExecStop=/usr/bin/killall {testsleep}
+            [Install]
+            WantedBy=multi-user.target
+            """.format(**locals()))
+        copy_tool(SLEEP_TOOL, os_path(bindir, testsleep))
+        copy_file(os_path(testdir, "zzz.service"), os_path(root, "/etc/systemd/system/zzz.service"))
+        # os.makedirs(os_path(root, workingdir)) # <<<<
+        #
+        cmd = "{systemctl} start zzz.service -vv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        top = _recent(output(_top_list))
+        logg.info("\n>>>\n%s", top)
+        self.assertTrue(greps(top, testsleep))
+        #
         self.rm_testdir()
         self.rm_zzfiles(root)
         self.coverage()
         self.end()
-    def test_3533_systemctl_py_with_bad_workingdirectory(self, real = False):
+    def test_3535_systemctl_py_with_bad_workingdirectory(self, real = False):
         """ check that we can start simple services with a bad WorkingDirectory with '-'"""
         self.begin()
         testname = self.testname()
@@ -7818,6 +7902,49 @@ class DockerSystemctlReplacementTest(unittest.TestCase):
         self.assertFalse(greps(top, testsleep))
         kill_testsleep = "killall {testsleep}"
         sx____(kill_testsleep.format(**locals()))
+        journal_log = root + "/var/log/journal/zzz.service.log"
+        journal = open(journal_log).read()
+        logg.info("zzz.service journal >>\n%s", journal)
+        self.rm_testdir()
+        self.rm_zzfiles(root)
+        self.coverage()
+        self.end()
+    def test_3536_systemctl_py_with_bad_workingdirectory_COVERAGE(self, real = False):
+        """ check that we can start simple services with a WorkingDirectory"""
+        self.begin()
+        testname = self.testname()
+        testdir = self.testdir()
+        user = self.user()
+        root = self.root(testdir, real)
+        logfile = os_path(root, "/var/log/test.log")
+        systemctl = cover() + _systemctl_py + " --root=" + root + " --coverage=spawn"
+        if real: vv, systemctl = "", "/usr/bin/systemctl"
+        testsleep = self.testname("sleep")
+        bindir = os_path(root, "/usr/bin")
+        workingdir = "/var/testsleep"
+        text_file(os_path(testdir, "zzz.service"),"""
+            [Unit]
+            Description=Testing Z
+            [Service]
+            Type=simple
+            WorkingDirectory=-{workingdir}
+            ExecStart={bindir}/{testsleep} 2
+            ExecStop=/usr/bin/killall {testsleep}
+            [Install]
+            WantedBy=multi-user.target
+            """.format(**locals()))
+        copy_tool(SLEEP_TOOL, os_path(bindir, testsleep))
+        copy_file(os_path(testdir, "zzz.service"), os_path(root, "/etc/systemd/system/zzz.service"))
+        # os.makedirs(os_path(root, workingdir)) # <<<<
+        #
+        cmd = "{systemctl} start zzz.service -vv"
+        out, end = output2(cmd.format(**locals()))
+        logg.info(" %s =>%s\n%s", cmd, end, out)
+        self.assertEqual(end, 0)
+        top = _recent(output(_top_list))
+        logg.info("\n>>>\n%s", top)
+        self.assertTrue(greps(top, testsleep))
+        #
         self.rm_testdir()
         self.rm_zzfiles(root)
         self.coverage()
