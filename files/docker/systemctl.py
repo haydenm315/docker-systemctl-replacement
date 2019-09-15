@@ -1679,11 +1679,11 @@ class Systemctl:
                 ignore = True
             into = os_path(self._root, self.expand_special(workingdir, conf))
             try: 
-               return os.chdir(into)
+                return os.chdir(into)
             except Exception as e:
-               if not ignore:
-                   logg.error("chdir workingdir '%s': %s", into, e)
-                   if check: raise
+                if not ignore:
+                    logg.error("chdir workingdir '%s': %s", into, e)
+                    if check: raise
         return None
     def notify_socket_from(self, conf, socketfile = None):
         """ creates a notify-socket for the (non-privileged) user """
@@ -2684,18 +2684,14 @@ class Systemctl:
             units = self.match_units(module)
             if not units:
                 logg.error("Unit %s could not be found.", unit_of(module))
-                results += [ "unknown" ]
+                results += [ "inactive" ]
                 continue
             for unit in units:
                 active = self.get_active_unit(unit) 
                 enabled = self.enabled_unit(unit)
                 results += [ active ]
                 break
-        ## how it should work:
         status = "active" in results
-        ## how 'systemctl' works:
-        non_active = [ result for result in results if result != "active" ]
-        status = not non_active
         if not status:
             status = 3
         if not _quiet:
