@@ -15,7 +15,8 @@ This script can also be run as docker-init of a docker container
 up all enabled services in the "multi-user.target" and where it 
 will reap all zombies from background processes in the container.
 When running a "docker stop" on such a container it will also 
-bring down all configured services correctly before exit.
+bring down all configured services correctly before exit. It does
+effectivly replace the SystemD daemon in containers.
 
     ## docker exec lamp-stack-container systemctl list-units --state=running
     httpd.service     loaded active running   The Apache HTTP Server
