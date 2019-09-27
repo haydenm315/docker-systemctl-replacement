@@ -14,6 +14,18 @@ Firefox will however start if any such number is written.
 Theoretically it should be available through docker but that
 is not always the case, somehow.
 
+## Not named systemd
+
+Some services want to be clever in detecting whether SystemD
+features are available on an actual system or not. They do 
+that by checking /proc/1/cmdline to contain "systemd" in the
+first 16 characters. If that is not the case then they fall
+back to SysV features.
+
+If you do put such a service in a container then you should
+symlink the replacement script as /usr/bin/some-systemd-script
+and then put this one in the CMD property of the container
+image.
 
 ## Ansible service module
 
